@@ -170,9 +170,9 @@ function panel(sc) {
     return `<button class="${cx('k', armed && 'armed')}" data-action="play" data-v="${v}" data-key="v${v}" aria-label="Place ${label(v)}"${ok ? '' : ' disabled'}>${label(v)}</button>`;
   }).join('');
   const stealRow = canSteal()
-    ? `<div class="pal sub"><button class="k word" data-action="steal" data-key="steal" title="Take ${NAME[S.first]}'s opening move as your own (S)">Steal opening move</button></div>`
+    ? `<div class="pal steal"><button class="k word" data-action="steal" data-key="steal" title="Take ${NAME[S.first]}'s opening move as your own (S)">Steal opening move</button></div>`
     : '';
-  return `<div class="pal">${keys}${undoBtn()}</div>${stealRow}`;
+  return `${stealRow}<div class="pal">${keys}${undoBtn()}</div>`;
 }
 
 /* ---------- Input ---------- */

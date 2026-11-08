@@ -108,22 +108,17 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 
 .result { margin: 0; text-align: center; font-family: var(--serif); font-style: italic; font-weight: 900; font-size: 34px; color: var(--tone, var(--ink)); }
 
-/* ---------- Phones: the whole game fits one screen, never scrolls ----------
-   The page is exactly the visible height (dvh tracks the browser's toolbars), everything but the board
-   takes its natural size, and the board takes the largest square that fits what's left. */
-@media (max-width: 600px) and (min-height: 480px) {
-  .wrap {
-    height: 100vh; height: 100dvh; gap: 10px;
-    padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
-  }
-  .game { flex: 1; min-height: 0; gap: 10px; }
+/* ---------- Phones: compact enough that the whole game fits one screen without scrolling ----------
+   The board always spans the full column, the same width as the score box and the buttons;
+   everything around it is tightened instead. */
+@media (max-width: 600px) {
+  .wrap, .game { gap: 10px; }
+  .wrap { padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
   header { padding: 6px 0; }
   h1 { font-size: clamp(26px, 8.5vw, 34px); }
   .ib { width: 40px; height: 40px; }
   .score { padding: 8px 12px; gap: 6px; }
   .pts { font-size: 30px; }
-  .stage { flex: 1; min-height: 0; container-type: size; display: flex; align-items: center; justify-content: center; }
-  .board { width: min(100cqw, 100cqh - 2px); }
   .k { height: 46px; }
   .k.undo { flex-basis: 46px; }
   .k.word { height: 40px; }
