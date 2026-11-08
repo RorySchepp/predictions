@@ -108,7 +108,6 @@ function render() {
   }
   $('board').innerHTML = html;
   $('panel').innerHTML = panel(sc);
-  $('hint').textContent = hint();
   persist();
 
   // On the board, keyboard focus follows the selection; with nothing selected it lets go,
@@ -160,14 +159,6 @@ function panel(sc) {
   return `<div class="pal">${keys}${undoBtn()}</div>${stealRow}`;
 }
 
-function hint() {
-  if (S.phase === 'over') return 'All ten lines are settled.';
-  if (sel < 0 || S.board[sel]) return 'Select an empty square.';
-  const fits = VALUES.filter(v => isLegal(S.board, sel, v)).map(label);
-  const list = fits.length === 1 ? fits[0] : fits.slice(0, -1).join(', ') + ' or ' + fits[fits.length - 1];
-  return `${list} ${fits.length === 1 ? 'fits' : 'fit'} the marked square.`;
-}
-
 /* ---------- Input ---------- */
 $('board').addEventListener('click', e => {
   const b = e.target.closest('.sq.can');
@@ -187,18 +178,12 @@ $('panel').addEventListener('click', e => {
   }
 });
 $('new').addEventListener('click', newGame);
-$('help').addEventListener('click', () => {
-  const d = $('rules');
-  if (d.open) return;
-  if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
-  d.scrollTop = 0;   // on short screens, open at the heading rather than scrolled to the button
-});
 
 const KEYS = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, x: X, X: X };
 const ARROWS = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
 const clamp = n => Math.min(4, Math.max(0, n));
 document.addEventListener('keydown', e => {
-  if (e.metaKey || e.ctrlKey || e.altKey || $('rules').open) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key;
   if (k === 'z' || k === 'u' || k === 'U') return undo();
   if (S.phase !== 'play') return;
