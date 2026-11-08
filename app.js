@@ -3,13 +3,12 @@
 
 /* ---------- State ---------- */
 const other = p => (p === 'R' ? 'B' : 'R');
-const STORE_KEY = 'predictions:v1';
 const HISTORY_LIMIT = 500;
 let starter = 'R', S, history = [], sel = 12;
 
 function fresh() {
   return { board: Array(25).fill(null), first: starter, turn: starter, phase: 'play', moves: 0, last: -1,
-           status: LINES.map(() => ({ decided: false })) };
+           status: LINES.map(() => ({ decided: false })), log: '' };
 }
 const save = () => { history.push(JSON.stringify(S)); if (history.length > HISTORY_LIMIT) history.shift(); };
 const finishIfDone = () => { if (S.status.every(s => s.decided)) S.phase = 'over'; };
@@ -18,25 +17,35 @@ function newGame() {
   if (S && S.moves > 0) save();   // keep the old game reachable with undo
   S = fresh(); sel = 12; render();
 }
-function play(i, v) {
-  if (S.phase !== 'play' || !isLegal(S.board, i, v)) return;
+function applyPlay(i, v) {
+  if (S.phase !== 'play' || !isLegal(S.board, i, v)) return false;
   save();
   S.board[i] = { v, o: S.turn };
   S.moves++; S.last = i;
+  S.log += CELLS[i] + (v === X ? 'x' : v);
   S.status = S.status.map((s, li) => (s.decided ? s : analyzeLine(S.board, LINES[li].cells)));
   finishIfDone();
   if (S.phase !== 'over') S.turn = other(S.turn);
+  return true;
+}
+function play(i, v) {
+  if (!applyPlay(i, v)) return;
   sel = -1;
   render();
 }
 const canSteal = () => S.phase === 'play' && S.moves === 1 && S.last >= 0 && S.board[S.last]?.o === S.first;
-function steal() {
-  if (!canSteal()) return;
+function applySteal() {
+  if (!canSteal()) return false;
   save();
   S.board[S.last] = { ...S.board[S.last], o: S.turn };
   S.turn = S.first;
+  S.log += '_';
   S.status = analyzeAll(S.board);
   finishIfDone();
+  return true;
+}
+function steal() {
+  if (!applySteal()) return;
   sel = -1;
   render();
 }
@@ -53,29 +62,36 @@ function scores() {
   return sc;
 }
 
-/* ---------- Saving between visits ----------
-   Browser storage can be missing, full or blocked; the game works the same without it. */
-function persist() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify({ S, history, starter })); } catch (_) {}
+/* ---------- The game in the URL ----------
+   The address ends in a code like #Rm3gx_a5: who moved first (R or B), then each move in order,
+   as a square (a–y, reading left to right, top to bottom) and a piece (1–5 or x). An _ is a steal.
+   Reloading or opening the link replays those moves, so undo still works afterwards. */
+const CELLS = 'abcdefghijklmnopqrstuvwxy';
+const gameCode = () => S.first + S.log;
+
+function writeCode() {
+  const code = gameCode();
+  if (location.hash.slice(1) === code) return;
+  try { window.history.replaceState(null, '', '#' + code); } catch (_) { location.hash = code; }
 }
-function validState(s) {
-  return s && Array.isArray(s.board) && s.board.length === 25
-    && s.board.every(p => p === null || (VALUES.includes(p.v) && (p.o === 'R' || p.o === 'B')))
-    && (s.phase === 'play' || s.phase === 'over') && (s.turn === 'R' || s.turn === 'B')
-    && (s.first === 'R' || s.first === 'B') && Number.isInteger(s.moves) && Number.isInteger(s.last);
+function loadCode(code) {
+  const m = /^([RB])((?:[a-y][1-5x]|_)*)$/.exec(code);
+  if (!m) return false;
+  const was = { S, history, starter };
+  starter = m[1]; S = fresh(); history = [];
+  for (const t of m[2].match(/[a-y][1-5x]|_/g) || []) {
+    const ok = t === '_' ? applySteal()
+                         : applyPlay(CELLS.indexOf(t[0]), t[1] === 'x' ? X : +t[1]);
+    if (!ok) { ({ S, history, starter } = was); return false; }
+  }
+  starter = S.first;
+  sel = S.phase === 'play' && S.moves === 0 ? 12 : -1;
+  return true;
 }
-function restore() {
-  try {
-    const d = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (!d || !validState(d.S)) return false;
-    S = d.S;
-    S.status = analyzeAll(S.board);   // re-derive rather than trust what was stored
-    history = Array.isArray(d.history) ? d.history.filter(h => typeof h === 'string').slice(-HISTORY_LIMIT) : [];
-    starter = d.starter === 'B' ? 'B' : 'R';
-    sel = S.phase === 'play' && S.moves === 0 ? 12 : -1;
-    return true;
-  } catch (_) { return false; }
-}
+window.addEventListener('hashchange', () => {
+  const code = location.hash.slice(1);
+  if (code && code !== gameCode() && loadCode(code)) render();
+});
 
 /* ---------- Render ---------- */
 const $ = id => document.getElementById(id);
@@ -108,7 +124,7 @@ function render() {
   }
   $('board').innerHTML = html;
   $('panel').innerHTML = panel(sc);
-  persist();
+  writeCode();
 
   // On the board, keyboard focus follows the selection; with nothing selected it lets go,
   // so no stray ring is left on a square that was just played.
@@ -198,5 +214,7 @@ document.addEventListener('keydown', e => {
   render();
 });
 
-if (!restore()) S = fresh();
+// The address is the only place the game is kept. Clear what older versions saved in the browser.
+try { localStorage.removeItem('predictions:v1'); } catch (_) {}
+if (!loadCode(location.hash.slice(1))) S = fresh();
 render();
