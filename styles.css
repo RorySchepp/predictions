@@ -121,7 +121,6 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
   .pts { font-size: 30px; }
   .k { height: 46px; }
   .k.undo { flex-basis: 46px; }
-  .k.word { height: 40px; }
   .pal.sub { margin-top: 6px; }
   .result { font-size: 28px; }
   .result + .pal.sub { margin-top: 8px; }
