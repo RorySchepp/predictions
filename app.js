@@ -8,13 +8,18 @@ let starter = 'R', S, history = [], sel = 12;
 
 /* Two ways to play.
    'local': both players share this device and simply take turns.
-   'link':  play by correspondence. You make one move, send the link, and the board waits for the reply.
+   'link':  play by correspondence. Each copy of the link belongs to one player (its seat). You can only move
+            when it's your seat's turn; then you send the link, and your own copy waits for the reply.
             Undo only takes back the move you haven't sent yet. */
 let mode = 'local';
+let seat = 'R';      // link mode: whose copy of the game this is
 let base = 0;        // link mode: length of the move log as it arrived (or was last sent); later moves are yours, unsent
-let sent = '';       // link mode: '' or how the current position went out ('shared' / 'copied')
+let sent = '';       // link mode: '' or how the position last went out this visit ('shared' / 'copied' / 'manual')
 const pending = () => mode === 'link' && S.log.length > base;
-const canMove = () => S.phase === 'play' && (mode === 'local' || (!pending() && !sent));
+const canMove = () => S.phase === 'play' && (mode === 'local' || S.turn === seat);
+// The mode is chosen at the start: same-device play locks at the first move, link play once a link has gone out
+// or come in. A new game unlocks it.
+const modeLocked = () => (mode === 'local' ? S.log.length > 0 : base > 0 || !!sent);
 const canUndo = () => (mode === 'local' ? history.length > 0 : pending());
 
 function fresh() {
@@ -31,7 +36,7 @@ function newGame() {
     history = [];                   // in link mode the old game stays reachable with the browser's back button
     pushCode = true;
   }
-  S = fresh(); base = 0; sent = ''; sel = 12; render();
+  S = fresh(); seat = S.first; base = 0; sent = ''; sel = 12; render();
 }
 function applyPlay(i, v) {
   if (S.phase !== 'play' || !isLegal(S.board, i, v)) return false;
@@ -82,10 +87,13 @@ function scores() {
 /* ---------- The game in the URL ----------
    The address ends in a code like #Rm3gx_a5: who moved first (R or B), then each move in order,
    as a square (a–y, reading left to right, top to bottom) and a piece (1–5 or x). An _ is a steal.
-   Reloading or opening the link replays those moves. A game played by link starts with ~ (#~Rm3gx),
-   so whoever opens it plays the same way; opening one counts as receiving it, so the player to move moves next. */
+   Reloading or opening the link replays those moves.
+   A game played by link starts with ~ and the seat it belongs to: #~bRm3 is Blue's copy, and since it's Blue's
+   turn, Blue can move. Red's own address stays #~rRm3, which just waits. So the link you send differs from
+   your own address only in that letter. */
 const CELLS = 'abcdefghijklmnopqrstuvwxy';
-const gameCode = () => (mode === 'link' ? '~' : '') + S.first + S.log;
+const codeFor = who => (mode === 'link' ? '~' + who.toLowerCase() : '') + S.first + S.log;
+const gameCode = () => codeFor(seat);
 let pushCode = false;   // the next address change gets its own entry in the browser's history (a new game)
 
 function writeCode() {
@@ -95,27 +103,28 @@ function writeCode() {
   try { window.history[push ? 'pushState' : 'replaceState'](null, '', '#' + code); } catch (_) { location.hash = code; }
 }
 function loadCode(code) {
-  const m = /^(~?)([RB])((?:[a-y][1-5x]|_)*)$/.exec(code);
+  const m = /^(?:(~)([rb]?))?([RB])((?:[a-y][1-5x]|_)*)$/.exec(code);
   if (!m) return false;
   const was = { S, history, starter };
-  starter = m[2]; S = fresh(); history = [];
-  for (const t of m[3].match(/[a-y][1-5x]|_/g) || []) {
+  starter = m[3]; S = fresh(); history = [];
+  for (const t of m[4].match(/[a-y][1-5x]|_/g) || []) {
     const ok = t === '_' ? applySteal()
                          : applyPlay(CELLS.indexOf(t[0]), t[1] === 'x' ? X : +t[1]);
     if (!ok) { ({ S, history, starter } = was); return false; }
   }
   starter = S.first;
   mode = m[1] ? 'link' : 'local';
+  seat = m[2] ? m[2].toUpperCase() : S.turn;   // a link without a seat belongs to whoever is to move
   if (mode === 'link') history = [];   // what arrived can't be taken back
   base = S.log.length; sent = '';
   sel = S.phase === 'play' && S.moves === 0 ? 12 : -1;
   return true;
 }
 function setMode(m) {
-  if (m === mode) return;
+  if (m === mode || modeLocked()) return;
   mode = m;
-  // Switching to link play treats the board as it stands as received: the player to move moves and sends.
-  base = S.log.length; sent = '';
+  // Switching to link play hands this device to the player to move: they move, then send.
+  seat = S.turn; base = S.log.length; sent = '';
   if (mode === 'link') history = [];
   sel = canMove() && S.moves === 0 ? 12 : -1;
   render();
@@ -123,8 +132,8 @@ function setMode(m) {
 
 /* Sending: the phone's share sheet where there is one, otherwise the link goes on the clipboard. */
 async function send() {
-  if (!pending() && !sent) return;
-  const url = location.href.split('#')[0] + '#' + gameCode();
+  if (mode !== 'link' || canMove()) return;
+  const url = location.href.split('#')[0] + '#' + codeFor(other(seat));   // your opponent's copy
   const text = S.phase === 'over' ? 'Our game of Predictions is over.' : 'Your move in Predictions.';
   if (navigator.share) {
     try { await navigator.share({ title: 'Predictions', text, url }); return markSent('shared'); }
@@ -178,7 +187,13 @@ function render() {
   }
   $('board').innerHTML = html;
   $('panel').innerHTML = panel(sc);
-  for (const b of document.querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+  const locked = modeLocked();
+  for (const b of document.querySelectorAll('[data-mode]')) {
+    const on = b.dataset.mode === mode;
+    b.setAttribute('aria-pressed', String(on));
+    b.hidden = locked && !on;   // once locked, only the mode in play is shown
+    b.disabled = locked;
+  }
   writeCode();
 
   // On the board, keyboard focus follows the selection; with nothing selected it lets go,
@@ -210,7 +225,7 @@ function cell(i) {
 
 const UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const undoBtn = () => `<button class="k undo" data-action="undo" data-key="undo" aria-label="Undo" title="${mode === 'link' ? 'Take back your unsent move (U)' : 'Undo (U)'}"${canUndo() ? '' : ' disabled'}>${UNDO}</button>`;
-const SENT_LABEL = { shared: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copy the link from the address bar' };
+const SENT_LABEL = { shared: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copying failed · try again' };
 
 function panel(sc) {
   let result = '';
@@ -224,8 +239,9 @@ function panel(sc) {
   if (pending()) {
     return `${result}<div class="${cx('pal', result && 'sub')}"><button class="k word armed wide" data-action="send" data-key="send" title="Send this position to your opponent (Enter)">Send move</button>${undoBtn()}</div>`;
   }
-  if (sent && S.phase === 'play') {
-    return `<div class="pal"><button class="k word wide" data-action="send" data-key="send">${SENT_LABEL[sent]}</button>${undoBtn()}</div>`;
+  if (mode === 'link' && S.phase === 'play' && S.turn !== seat) {   // waiting for the reply
+    const text = sent ? SENT_LABEL[sent] : `Send to ${NAME[other(seat)]}`;
+    return `<div class="pal"><button class="k word wide" data-action="send" data-key="send" title="Send ${NAME[other(seat)]} their copy of the game">${text}</button>${undoBtn()}</div>`;
   }
   if (S.phase === 'over') {
     return `${result}<div class="pal sub"><button class="k word armed" data-action="again" data-key="again">Play again</button>${undoBtn()}</div>`;
