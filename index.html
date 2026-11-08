@@ -10,13 +10,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Serif+Text:ital@0;1&family=Libre+Franklin:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=7">
+<link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>Predictions</h1>
     <div class="acts">
+      <div class="seg" role="group" aria-label="How you're playing">
+        <button class="ib" data-mode="local" aria-pressed="true" aria-label="Same device" title="Same device: take turns on this screen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="3" width="11" height="18" rx="1.5"/><path d="M11 17.5h2"/></svg>
+        </button>
+        <button class="ib" data-mode="link" aria-pressed="false" aria-label="By link" title="By link: make a move, send it, wait for the reply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5 21 3Z"/></svg>
+        </button>
+      </div>
       <button class="ib" id="new" aria-label="New game" title="New game (undo brings the old one back)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
       </button>
@@ -39,7 +47,7 @@
 </div>
 
 <noscript><p style="text-align:center;font-family:Georgia,serif">Predictions needs JavaScript to run.</p></noscript>
-<script src="engine.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="engine.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

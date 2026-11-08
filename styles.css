@@ -35,6 +35,9 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 }
 .ib svg { width: 20px; height: 20px; }
 @media (hover: hover) { .ib:hover { background: var(--ink); color: var(--bg); } }
+.seg { display: flex; margin-right: 6px; }
+.seg .ib + .ib { border-left: 0; }
+.ib[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 
 /* ---------- Score ---------- */
 .score {
@@ -105,6 +108,7 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 .k.undo svg { width: 20px; height: 20px; }
 .k.word { flex: 0 1 auto; padding: 0 22px; font-family: var(--sans); font-weight: 800; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
 .k.word.armed { background: var(--ink); color: var(--bg); }
+.k.word.wide { flex: 1 1 auto; }
 
 .result { margin: 0; text-align: center; font-family: var(--serif); font-style: italic; font-weight: 900; font-size: 34px; color: var(--tone, var(--ink)); }
 
