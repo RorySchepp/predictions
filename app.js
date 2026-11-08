@@ -4,6 +4,7 @@
 /* ---------- State ---------- */
 const other = p => (p === 'R' ? 'B' : 'R');
 const HISTORY_LIMIT = 500;
+const STEAL = 's';   // in the move log; every other entry is a [square, piece] pair
 let starter = 'R', S, history = [], sel = 12;
 
 /* Two ways to play.
@@ -12,9 +13,10 @@ let starter = 'R', S, history = [], sel = 12;
             when it's your seat's turn; then you send the link, and your own copy waits for the reply.
             Undo only takes back the move you haven't sent yet. */
 let mode = 'local';
-let seat = 'R';      // link mode: whose copy of the game this is
-let base = 0;        // link mode: length of the move log as it arrived (or was last sent); later moves are yours, unsent
-let sent = '';       // link mode: '' or how the position last went out this visit ('shared' / 'copied' / 'manual')
+let seat = 'R';         // link mode: whose copy of the game this is
+let base = 0;           // link mode: length of the move log as it arrived (or was last sent); later moves are yours, unsent
+let sent = '';          // link mode: '' or how the position last went out: 'sent' / 'copied' / 'manual'
+let pushCode = false;   // the next address change gets its own entry in the browser's history (a new game)
 const pending = () => mode === 'link' && S.log.length > base;
 const canMove = () => S.phase === 'play' && (mode === 'local' || S.turn === seat);
 // The mode is chosen at the start: same-device play locks at the first move, link play once a link has gone out
@@ -24,16 +26,16 @@ const canUndo = () => (mode === 'local' ? history.length > 0 : pending());
 
 function fresh() {
   return { board: Array(25).fill(null), first: starter, turn: starter, phase: 'play', moves: 0, last: -1,
-           status: LINES.map(() => ({ decided: false })), log: '' };
+           status: LINES.map(() => ({ decided: false })), log: [] };
 }
 const save = () => { history.push(JSON.stringify(S)); if (history.length > HISTORY_LIMIT) history.shift(); };
 const finishIfDone = () => { if (S.status.every(s => s.decided)) S.phase = 'over'; };
 
 function newGame() {
   if (mode === 'local') {
-    if (S && S.moves > 0) save();   // keep the old game reachable with undo
+    if (S.moves > 0) save();   // keep the old game reachable with undo
   } else {
-    history = [];                   // in link mode the old game stays reachable with the browser's back button
+    history = [];              // in link mode the old game stays reachable with the browser's back button
     pushCode = true;
   }
   S = fresh(); seat = S.first; base = 0; sent = ''; sel = 12; render();
@@ -43,33 +45,25 @@ function applyPlay(i, v) {
   save();
   S.board[i] = { v, o: S.turn };
   S.moves++; S.last = i;
-  S.log += CELLS[i] + (v === X ? 'x' : v);
+  S.log.push([i, v]);
   S.status = S.status.map((s, li) => (s.decided ? s : analyzeLine(S.board, LINES[li].cells)));
   finishIfDone();
   if (S.phase !== 'over') S.turn = other(S.turn);
   return true;
 }
-function play(i, v) {
-  if (!applyPlay(i, v)) return;
-  sel = -1;
-  render();
-}
-const canSteal = () => S.phase === 'play' && S.moves === 1 && S.last >= 0 && S.board[S.last]?.o === S.first;
+const canSteal = () => S.phase === 'play' && S.moves === 1 && S.board[S.last]?.o === S.first;
 function applySteal() {
   if (!canSteal()) return false;
   save();
   S.board[S.last] = { ...S.board[S.last], o: S.turn };
   S.turn = S.first;
-  S.log += '_';
+  S.log.push(STEAL);
   S.status = analyzeAll(S.board);
   finishIfDone();
   return true;
 }
-function steal() {
-  if (!applySteal()) return;
-  sel = -1;
-  render();
-}
+function play(i, v) { if (applyPlay(i, v)) { sel = -1; render(); } }
+function steal() { if (applySteal()) { sel = -1; render(); } }
 function undo() {
   if (!canUndo()) return;
   const was = S.last;
@@ -84,97 +78,78 @@ function scores() {
   return sc;
 }
 
-/* ---------- The game in the URL ----------
-   Inside, a game is a readable move list like Rm3gx_a5: who moved first (R or B), then each move in order,
-   as a square (a–y, reading left to right, top to bottom) and a piece (1–5 or x). An _ is a steal.
-   A game played by link starts with ~ and the seat that copy belongs to: ~bRm3 is Blue's copy, and since it's
-   Blue's turn, Blue can move. Red's own copy is ~rRm3 until Red sends it, then ~r!Rm3: the ! marks it sent.
-   So on reload an unsent move can still be sent or taken back, and a sent one just waits.
-   The address carries that list packed small (see pack below). Reloading or opening the link replays it. */
-const CELLS = 'abcdefghijklmnopqrstuvwxy';
-const READABLE = /^(?:(~)([rb]?)(!?))?([RB])((?:[a-y][1-5x]|_)*)$/;
-const readableFor = who => (mode === 'link' ? '~' + who.toLowerCase() + (sent && who === seat ? '!' : '') : '')
-                           + S.first + S.log;
-const codeFor = who => pack(readableFor(who));
-const gameCode = () => codeFor(seat);
+/* ---------- The game in the address ----------
+   The hash holds the whole game, packed small; reloading or opening the link replays it.
+   Two characters of header: five flags plus 32 × the number of pieces down. Then the moves as one number:
+   each move picks one of the empty squares left and one of six pieces, so the choices multiply into a single
+   number, written in base 64. A full 25-move game is about 26 characters.
+   In link play each copy belongs to one seat, and a copy marked sent is waiting for the reply. So on reload an
+   unsent move can still be sent or taken back, and a sent one just waits. */
+const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_';
+const BASE = ALPHA.length, BIG = BigInt(BASE);
+const F_LINK = 1, F_BLUE_SEAT = 2, F_SENT = 4, F_BLUE_FIRST = 8, F_STEAL = 16;
 
-/* Packing. Not secret, just short and not readable at a glance.
-   Two characters hold the mode, seat, sent mark, who moved first, whether there was a steal, and how many pieces
-   are down. (Header values 0–311 are the original codes; sent copies use 312 and up, so older links still open.)
-   The moves become one number: each move is a choice of one of the empty squares left times one of six pieces,
-   so the choices multiply into a single number, written in base 62. A full 25-move game is about 27 characters.
-   The alphabet has no R, B or ~, so a packed code can never be mistaken for an old readable one. */
-const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyzACDEFGHIJKLMNOPQSTUVWXYZ-_';
-const B62 = BigInt(ALPHA.length);
-function pack(readable) {
-  const m = READABLE.exec(readable);
-  const link = !!m[1], toks = m[5].match(/[a-y][1-5x]|_/g) || [];
-  const moves = toks.filter(t => t !== '_');
-  const f = (m[4] === 'B' ? 2 : 0) + (toks.includes('_') ? 1 : 0);
-  const flags = link ? 4 + (m[2] === 'b' ? 4 : 0) + f : f;
-  const empty = [...Array(25).keys()];
+function encode(who) {
+  const link = mode === 'link';
+  const plays = S.log.filter(t => t !== STEAL);
+  const flags = (link ? F_LINK : 0) | (link && who === 'B' ? F_BLUE_SEAT : 0) | (link && sent && who === seat ? F_SENT : 0)
+              | (S.first === 'B' ? F_BLUE_FIRST : 0) | (S.log.includes(STEAL) ? F_STEAL : 0);
+  const header = flags + 32 * plays.length;
+  const empty = range(25);
   let n = 0n, scale = 1n;
-  for (const t of moves) {
-    const k = empty.indexOf(CELLS.indexOf(t[0]));
-    n += BigInt(k * 6 + (t[1] === 'x' ? 5 : +t[1] - 1)) * scale;
+  for (const [i, v] of plays) {
+    const k = empty.indexOf(i);
+    n += BigInt(k * 6 + v - 1) * scale;
     scale *= BigInt(empty.length * 6);
     empty.splice(k, 1);
   }
-  const h = link && m[3] ? 312 + (flags - 4) + 8 * moves.length : flags + 12 * moves.length;
   let tail = '';
-  for (; n > 0n; n /= B62) tail = ALPHA[Number(n % B62)] + tail;
-  return ALPHA[Math.floor(h / 62)] + ALPHA[h % 62] + tail;
+  for (; n > 0n; n /= BIG) tail = ALPHA[Number(n % BIG)] + tail;
+  return ALPHA[Math.floor(header / BASE)] + ALPHA[header % BASE] + tail;
 }
-function unpack(code) {
+function decode(code) {
   const digits = [...code].map(c => ALPHA.indexOf(c));
   if (digits.length < 2 || digits.includes(-1)) return null;
-  const h = digits[0] * 62 + digits[1], isSent = h >= 312;
-  const flags = isSent ? 4 + (h - 312) % 8 : h % 12;
-  const count = isSent ? Math.floor((h - 312) / 8) : Math.floor(h / 12);
-  if (count > 25) return null;
+  const header = digits[0] * BASE + digits[1], flags = header % 32, count = Math.floor(header / 32);
+  if (count > 25 || ((flags & F_STEAL) && !count)) return null;   // a steal needs a first move to take
   let n = 0n;
-  for (const d of digits.slice(2)) n = n * B62 + BigInt(d);
-  const empty = [...Array(25).keys()], toks = [];
-  for (let i = 0; i < count; i++) {
+  for (const d of digits.slice(2)) n = n * BIG + BigInt(d);
+  const empty = range(25), plays = [];
+  for (let k = 0; k < count; k++) {
     const r = BigInt(empty.length * 6), d = Number(n % r);
     n /= r;
-    const v = d % 6;
-    toks.push(CELLS[empty.splice(Math.floor(d / 6), 1)[0]] + (v === 5 ? 'x' : v + 1));
+    plays.push([empty.splice(Math.floor(d / 6), 1)[0], d % 6 + 1]);
   }
   if (n !== 0n) return null;
-  const link = flags >= 4, f = link ? flags - 4 : flags;
-  if (f & 1) { if (!count) return null; toks.splice(1, 0, '_'); }   // a steal can only follow the first move
-  return (link ? '~' + (f & 4 ? 'b' : 'r') + (isSent ? '!' : '') : '') + (f & 2 ? 'B' : 'R') + toks.join('');
+  const link = !!(flags & F_LINK);
+  return { link, seat: flags & F_BLUE_SEAT ? 'B' : 'R', sent: link && !!(flags & F_SENT),
+           first: flags & F_BLUE_FIRST ? 'B' : 'R', steal: !!(flags & F_STEAL), plays };
 }
-let pushCode = false;   // the next address change gets its own entry in the browser's history (a new game)
+const gameCode = () => encode(seat);
 
 function writeCode() {
   const code = gameCode(), push = pushCode;
   pushCode = false;
   if (location.hash.slice(1) === code) return;
-  try { window.history[push ? 'pushState' : 'replaceState'](null, '', '#' + code); } catch (_) { location.hash = code; }
+  window.history[push ? 'pushState' : 'replaceState'](null, '', '#' + code);
 }
 function loadCode(code) {
-  if (!READABLE.test(code)) code = unpack(code);   // older links used the readable form directly
-  const m = code && READABLE.exec(code);
-  if (!m) return false;
+  const g = decode(code);
+  if (!g) return false;
   const was = { S, history, starter };
-  starter = m[4]; S = fresh(); history = [];
-  for (const t of m[5].match(/[a-y][1-5x]|_/g) || []) {
-    const ok = t === '_' ? applySteal()
-                         : applyPlay(CELLS.indexOf(t[0]), t[1] === 'x' ? X : +t[1]);
-    if (!ok) { ({ S, history, starter } = was); return false; }
+  starter = g.first; S = fresh(); history = [];
+  for (const [k, [i, v]] of g.plays.entries()) {
+    if (!applyPlay(i, v) || (k === 0 && g.steal && !applySteal())) { ({ S, history, starter } = was); return false; }
   }
-  starter = S.first;
-  mode = m[1] ? 'link' : 'local';
-  seat = m[2] ? m[2].toUpperCase() : S.turn;   // a link without a seat belongs to whoever is to move
-  sent = mode === 'link' && m[3] ? 'earlier' : '';
+  mode = g.link ? 'link' : 'local';
+  seat = g.link ? g.seat : S.turn;
+  sent = g.sent ? 'sent' : '';
   base = S.log.length;
   // In link play only your own unsent move can be taken back. If this copy's last move is yours and it isn't
   // marked sent, it's still pending: keep the position before it for undo.
-  const lastMover = S.phase === 'over' ? S.turn : other(S.turn);
   if (mode === 'link') {
     const before = history.length ? JSON.parse(history[history.length - 1]) : null;
+    const lastMover = S.phase === 'over' ? S.turn : other(S.turn);
     history = [];
     if (before && !sent && lastMover === seat) { history = [JSON.stringify(before)]; base = before.log.length; }
   }
@@ -194,24 +169,15 @@ function setMode(m) {
 /* Sending: the phone's share sheet where there is one, otherwise the link goes on the clipboard. */
 async function send() {
   if (mode !== 'link' || canMove()) return;
-  const url = location.href.split('#')[0] + '#' + codeFor(other(seat));   // your opponent's copy
+  const url = location.href.split('#')[0] + '#' + encode(other(seat));   // your opponent's copy
   const text = S.phase === 'over' ? 'Our game of Predictions is over.' : 'Your move in Predictions.';
   if (navigator.share) {
-    try { await navigator.share({ title: 'Predictions', text, url }); return markSent('shared'); }
-    catch (e) { if (e && e.name === 'AbortError') return; }   // closed the share sheet: nothing was sent
+    try { await navigator.share({ title: 'Predictions', text, url }); return markSent('sent'); }
+    catch (e) { if (e?.name === 'AbortError') return; }   // closed the share sheet: nothing was sent
   }
-  markSent(await copyText(url) ? 'copied' : 'manual');
+  try { await navigator.clipboard.writeText(url); markSent('copied'); } catch (_) { markSent('manual'); }
 }
 function markSent(how) { base = S.log.length; sent = how; sel = -1; render(); }
-async function copyText(t) {
-  try { await navigator.clipboard.writeText(t); return true; } catch (_) {}
-  try {
-    const a = document.createElement('textarea');
-    a.value = t; a.setAttribute('readonly', ''); a.style.cssText = 'position:fixed;opacity:0';
-    document.body.appendChild(a); a.select();
-    const ok = document.execCommand('copy'); a.remove(); return ok;
-  } catch (_) { return false; }
-}
 window.addEventListener('hashchange', () => {   // a newer link opened in this tab, or the back button
   const code = location.hash.slice(1);
   if (code === gameCode()) return;
@@ -223,12 +189,10 @@ const $ = id => document.getElementById(id);
 const NAME = { R: 'Red', B: 'Blue' };
 const label = v => (v === X ? '×' : String(v));
 const cx = (...p) => p.filter(Boolean).join(' ');
-const COLS = 'abcde';
 
 function render() {
   const focusKey = document.activeElement?.dataset?.key;
   const sc = scores();
-  const active = S.phase === 'play' ? S.turn : null;
 
   $('ptsR').textContent = sc.R;
   $('ptsB').textContent = sc.B;
@@ -245,8 +209,8 @@ function render() {
     $('turn').className = cx('turn', 'final', cls);
     $('turn').textContent = text;
   } else {
-    $('turn').className = cx('turn', active);
-    $('turn').innerHTML = active ? `<span class="dot"></span>${NAME[active]} to move` : '';
+    $('turn').className = cx('turn', S.turn);
+    $('turn').innerHTML = `<span class="dot"></span>${NAME[S.turn]} to move`;
   }
 
   let html = '<div class="corner"></div>';
@@ -256,7 +220,7 @@ function render() {
     for (let c = 0; c < 5; c++) html += cell(r * 5 + c);
   }
   $('board').innerHTML = html;
-  $('panel').innerHTML = panel(sc);
+  $('panel').innerHTML = panel();
   const locked = modeLocked();
   for (const b of document.querySelectorAll('[data-mode]')) {
     const on = b.dataset.mode === mode;
@@ -269,10 +233,10 @@ function render() {
   // On the board, keyboard focus follows the selection; with nothing selected it lets go,
   // so no stray ring is left on a square that was just played.
   let key = focusKey;
-  if (key && key[0] === 'c') key = sel >= 0 ? `c${sel}` : null;
+  if (key?.[0] === 'c') key = sel >= 0 ? `c${sel}` : null;
   const target = key && document.querySelector(`[data-key="${key}"]:not(:disabled)`);
   if (target) target.focus();
-  else if (focusKey && focusKey[0] === 'c') document.activeElement?.blur();
+  else if (focusKey?.[0] === 'c') document.activeElement?.blur();
 }
 
 function ind(li) {
@@ -282,12 +246,11 @@ function ind(li) {
 
 function cell(i) {
   const p = S.board[i];
-  const name = `${COLS[i % 5]}${Math.floor(i / 5) + 1}`;
+  const name = `${'abcde'[i % 5]}${Math.floor(i / 5) + 1}`;
   const playing = canMove();
   if (p) {
     const cls = cx('sq', p.o, p.v === X && 'x', i === S.last && 'last', playing && i === sel && 'sel');
-    const glyph = label(p.v);
-    return `<button class="${cls}" data-key="c${i}" data-i="${i}" aria-label="${name}, ${NAME[p.o]} ${label(p.v)}">${glyph}</button>`;
+    return `<button class="${cls}" data-key="c${i}" data-i="${i}" aria-label="${name}, ${NAME[p.o]} ${label(p.v)}">${label(p.v)}</button>`;
   }
   const cls = cx('sq', playing && 'can', playing && i === sel && 'sel');
   return `<button class="${cls}" data-key="c${i}" data-i="${i}" aria-label="${name}, empty"${playing ? '' : ' disabled'}></button>`;
@@ -295,9 +258,9 @@ function cell(i) {
 
 const UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const undoBtn = () => `<button class="k undo" data-action="undo" data-key="undo" aria-label="Undo" title="${mode === 'link' ? 'Take back your unsent move (U)' : 'Undo (U)'}"${canUndo() ? '' : ' disabled'}>${UNDO}</button>`;
-const SENT_LABEL = { earlier: 'Sent · send again', shared: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copying failed · try again' };
+const SENT_LABEL = { sent: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copying failed · try again' };
 
-function panel(sc) {
+function panel() {
   // Link play: after your move the board waits until you send it; after sending, until the reply comes.
   if (pending()) {
     return `<div class="pal"><button class="k word armed wide" data-action="send" data-key="send" title="Send this position to your opponent (Enter)">Send move</button>${undoBtn()}</div>`;
@@ -362,7 +325,5 @@ document.addEventListener('keydown', e => {
   render();
 });
 
-// The address is the only place the game is kept. Clear what older versions saved in the browser.
-try { localStorage.removeItem('predictions:v1'); } catch (_) {}
 if (!loadCode(location.hash.slice(1))) S = fresh();
 render();

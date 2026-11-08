@@ -1,5 +1,4 @@
-/* Predictions: rules engine.
-   No DOM access, so the same file runs in the browser (as globals) and in Node (for the tests). */
+/* Predictions: rules engine. No DOM access; app.js uses these as globals. */
 'use strict';
 
 const X = 6;                          // the × piece; numbers are 1–5
@@ -59,5 +58,3 @@ function analyzeLine(board, cells) {
   return open ? { decided: false } : { decided: true, winner: outcome };
 }
 const analyzeAll = board => LINES.map(L => analyzeLine(board, L.cells));
-
-if (typeof module !== 'undefined') module.exports = { X, VALUES, LINES, isLegal, analyzeLine, analyzeAll };

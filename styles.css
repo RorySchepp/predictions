@@ -3,7 +3,6 @@
   --faint: #d0d0d0; --sel: #f2f2f2;
   --red: #a8261c; --blue: #1d3c8c;
   --serif: "DM Serif Display", Georgia, serif;
-  --text-serif: "DM Serif Text", Georgia, serif;
   --sans: "Libre Franklin", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -38,7 +37,6 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 .seg { display: flex; margin-right: 6px; }
 .ib[hidden] { display: none; }
 .seg .ib:not([hidden]) + .ib:not([hidden]) { border-left: 0; }
-.ib:disabled { cursor: default; }
 .ib[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 
 /* ---------- Score ---------- */
@@ -48,8 +46,7 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
   padding: 14px 16px;
 }
 .tally { display: flex; align-items: center; gap: 14px; }
-.pts { font-family: var(--serif); font-weight: 900; font-size: 40px; line-height: 1; min-width: 24px; color: var(--tone); }
-.pts.B { text-align: right; }
+.pts { font-family: var(--serif); font-weight: 900; font-size: 40px; min-width: 24px; color: var(--tone); }
 .bar { flex: 1; display: flex; height: 12px; border: 1px solid var(--rule); }
 .bar span { flex: 1; border-right: 1px solid var(--rule); }
 .bar span:last-child { border-right: 0; }
@@ -63,7 +60,7 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 
 /* ---------- Board ---------- */
 .board {
-  display: grid; gap: 0;
+  display: grid;
   grid-template-columns: 14px repeat(5, minmax(0, 1fr));
   grid-template-rows: 14px repeat(5, auto);
   border: 1px solid var(--rule);
@@ -77,8 +74,7 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
   position: relative; aspect-ratio: 1; padding: 0; border: 0; border-radius: 0;
   border-left: 1px solid var(--rule); border-top: 1px solid var(--rule);
   background: var(--bg); color: var(--tone, var(--ink));
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--serif); font-weight: 900; font-size: clamp(26px, 8vw, 36px); line-height: 1;
+  font-family: var(--serif); font-weight: 900; font-size: clamp(26px, 8vw, 36px);
   transition: background-color .12s ease;
 }
 .sq.x { font-weight: 700; color: var(--muted); }
@@ -106,12 +102,10 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 @media (hover: hover) { .k:not(:disabled):not(.armed):hover { background: var(--sel); } }
 .k.armed:not(:disabled) { background: var(--ink); color: var(--bg); }
 .k:disabled { color: var(--faint); }
-.k.undo { flex: 0 0 52px; margin-left: 6px; display: flex; align-items: center; justify-content: center; }
+.k.undo { flex: 0 0 52px; margin-left: 6px; }
 .k.undo svg { width: 20px; height: 20px; }
 .k.word { flex: 0 1 auto; padding: 0 22px; font-family: var(--sans); font-weight: 800; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
-.k.word.armed { background: var(--ink); color: var(--bg); }
 .k.word.wide { flex: 1 1 auto; }
-
 
 /* ---------- Phones: compact enough that the whole game fits one screen without scrolling ----------
    The board always spans the full column, the same width as the score box and the buttons;
