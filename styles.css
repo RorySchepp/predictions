@@ -40,7 +40,6 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 .seg .ib:not([hidden]) + .ib:not([hidden]) { border-left: 0; }
 .ib:disabled { cursor: default; }
 .ib[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
-.ib.confirm, .ib.confirm:hover { background: var(--red); border-color: var(--red); color: #fff; }
 
 /* ---------- Score ---------- */
 .score {

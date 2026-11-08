@@ -238,11 +238,8 @@ function render() {
                 ...Array(Math.ceil(open / 2)).fill(''), ...Array(sc.B).fill('B')];
   $('bar').innerHTML = segs.map(c => `<span class="${c}"></span>`).join('');
   $('score').setAttribute('aria-label', `Score: Red ${sc.R}, Blue ${sc.B}`);
-  $('turn').className = cx('turn', !confirmNew && active);
-  $('turn').innerHTML = confirmNew ? 'Tap again to start over'
-                      : active ? `<span class="dot"></span>${NAME[active]} to move` : '';
-  $('new').classList.toggle('confirm', !!confirmNew);
-  $('new').setAttribute('aria-label', confirmNew ? 'Tap again to start a new game' : 'New game');
+  $('turn').className = cx('turn', active);
+  $('turn').innerHTML = active ? `<span class="dot"></span>${NAME[active]} to move` : '';
 
   let html = '<div class="corner"></div>';
   for (let c = 0; c < 5; c++) html += ind(5 + c);
@@ -341,19 +338,7 @@ $('panel').addEventListener('click', e => {
     case 'send': send(); break;
   }
 });
-/* New game is the only way out of a link game, so mid-game it takes two taps: the first arms it for a few seconds. */
-let confirmNew = 0;   // timer while armed
-const needsConfirm = () => mode === 'link' && S.log.length > 0 && S.phase === 'play';
-function cancelConfirm() { if (confirmNew) { clearTimeout(confirmNew); confirmNew = 0; render(); } }
-$('new').addEventListener('click', () => {
-  if (needsConfirm() && !confirmNew) {
-    confirmNew = setTimeout(cancelConfirm, 3000);
-    return render();
-  }
-  clearTimeout(confirmNew); confirmNew = 0;
-  newGame();
-});
-document.addEventListener('click', e => { if (confirmNew && !e.target.closest('#new')) cancelConfirm(); }, true);
+$('new').addEventListener('click', newGame);
 for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => setMode(b.dataset.mode));
 
 const KEYS = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, x: X, X: X };
