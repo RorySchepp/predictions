@@ -88,8 +88,6 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
   border-color: transparent currentColor transparent transparent;
 }
 .sq.x.last::after { border-right-color: var(--tone); }
-.sq .glyph { animation: ink .18s ease-out; }
-@keyframes ink { from { opacity: 0; transform: scale(.8); } }
 
 /* ---------- Controls ---------- */
 .pal { display: flex; justify-content: center; gap: 6px; }

@@ -130,7 +130,7 @@ function cell(i) {
   const playing = S.phase === 'play';
   if (p) {
     const cls = cx('sq', p.o, p.v === X && 'x', i === S.last && 'last', playing && i === sel && 'sel');
-    const glyph = i === S.last ? `<span class="glyph">${label(p.v)}</span>` : label(p.v);
+    const glyph = label(p.v);
     return `<button class="${cls}" data-key="c${i}" data-i="${i}" aria-label="${name}, ${NAME[p.o]} ${label(p.v)}">${glyph}</button>`;
   }
   const cls = cx('sq', playing && 'can', playing && i === sel && 'sel');
