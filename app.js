@@ -162,7 +162,7 @@ function panel(sc) {
                       : sc.B > sc.R ? ['B', `Blue wins, ${sc.B}–${sc.R}`]
                       : ['', `A draw, ${sc.R}–${sc.B}`];
     return `<p class="${cx('result', cls)}">${text}</p>
-      <div class="pal" style="margin-top:14px"><button class="k word armed" data-action="again" data-key="again">Play again</button>${undoBtn()}</div>`;
+      <div class="pal sub"><button class="k word armed" data-action="again" data-key="again">Play again</button>${undoBtn()}</div>`;
   }
   const armed = sel >= 0 && !S.board[sel];
   const keys = VALUES.map(v => {
@@ -170,7 +170,7 @@ function panel(sc) {
     return `<button class="${cx('k', armed && 'armed')}" data-action="play" data-v="${v}" data-key="v${v}" aria-label="Place ${label(v)}"${ok ? '' : ' disabled'}>${label(v)}</button>`;
   }).join('');
   const stealRow = canSteal()
-    ? `<div class="pal" style="margin-top:8px"><button class="k word" data-action="steal" data-key="steal" title="Take ${NAME[S.first]}'s opening move as your own (S)">Steal opening move</button></div>`
+    ? `<div class="pal sub"><button class="k word" data-action="steal" data-key="steal" title="Take ${NAME[S.first]}'s opening move as your own (S)">Steal opening move</button></div>`
     : '';
   return `<div class="pal">${keys}${undoBtn()}</div>${stealRow}`;
 }
