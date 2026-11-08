@@ -4,13 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Predictions</title>
-<meta name="description" content="Predictions: a two-player number game on a 5×5 board.">
+<meta name="description" content="A two-player number game on a 5×5 board. Play on one screen, or send moves back and forth by link.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="schepp.ca">
+<meta property="og:title" content="Predictions">
+<meta property="og:description" content="A two-player number game on a 5×5 board. Play on one screen, or send moves back and forth by link.">
+<meta property="og:url" content="https://schepp.ca/predictions/">
+<meta property="og:image" content="https://schepp.ca/predictions/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Predictions: a two-player number game.">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Serif+Text:ital@0;1&family=Libre+Franklin:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 <div class="wrap">
@@ -25,7 +35,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5 21 3Z"/></svg>
         </button>
       </div>
-      <button class="ib" id="new" aria-label="New game" title="New game (undo brings the old one back)">
+      <button class="ib" id="new" aria-label="New game" title="New game">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
       </button>
     </div>
@@ -47,7 +57,7 @@
 </div>
 
 <noscript><p style="text-align:center;font-family:Georgia,serif">Predictions needs JavaScript to run.</p></noscript>
-<script src="engine.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="engine.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
