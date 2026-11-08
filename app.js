@@ -85,15 +85,62 @@ function scores() {
 }
 
 /* ---------- The game in the URL ----------
-   The address ends in a code like #Rm3gx_a5: who moved first (R or B), then each move in order,
+   Inside, a game is a readable move list like Rm3gx_a5: who moved first (R or B), then each move in order,
    as a square (a–y, reading left to right, top to bottom) and a piece (1–5 or x). An _ is a steal.
-   Reloading or opening the link replays those moves.
-   A game played by link starts with ~ and the seat it belongs to: #~bRm3 is Blue's copy, and since it's Blue's
-   turn, Blue can move. Red's own address stays #~rRm3, which just waits. So the link you send differs from
-   your own address only in that letter. */
+   A game played by link starts with ~ and the seat that copy belongs to: ~bRm3 is Blue's copy, and since it's
+   Blue's turn, Blue can move; Red's own copy, ~rRm3, just waits.
+   The address carries that list packed small (see pack below). Reloading or opening the link replays it. */
 const CELLS = 'abcdefghijklmnopqrstuvwxy';
-const codeFor = who => (mode === 'link' ? '~' + who.toLowerCase() : '') + S.first + S.log;
+const READABLE = /^(?:(~)([rb]?))?([RB])((?:[a-y][1-5x]|_)*)$/;
+const readableFor = who => (mode === 'link' ? '~' + who.toLowerCase() : '') + S.first + S.log;
+const codeFor = who => pack(readableFor(who));
 const gameCode = () => codeFor(seat);
+
+/* Packing. Not secret, just short and not readable at a glance.
+   Two characters hold the mode, seat, who moved first, whether there was a steal, and how many pieces are down.
+   The moves become one number: each move is a choice of one of the empty squares left times one of six pieces,
+   so the choices multiply into a single number, written in base 62. A full 25-move game is about 27 characters.
+   The alphabet has no R, B or ~, so a packed code can never be mistaken for an old readable one. */
+const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyzACDEFGHIJKLMNOPQSTUVWXYZ-_';
+const B62 = BigInt(ALPHA.length);
+function pack(readable) {
+  const m = READABLE.exec(readable);
+  const link = !!m[1], toks = m[4].match(/[a-y][1-5x]|_/g) || [];
+  const moves = toks.filter(t => t !== '_');
+  const f = (m[3] === 'B' ? 2 : 0) + (toks.includes('_') ? 1 : 0);
+  const flags = link ? 4 + (m[2] === 'b' ? 4 : 0) + f : f;
+  const empty = [...Array(25).keys()];
+  let n = 0n, scale = 1n;
+  for (const t of moves) {
+    const k = empty.indexOf(CELLS.indexOf(t[0]));
+    n += BigInt(k * 6 + (t[1] === 'x' ? 5 : +t[1] - 1)) * scale;
+    scale *= BigInt(empty.length * 6);
+    empty.splice(k, 1);
+  }
+  const h = flags + 12 * moves.length;
+  let tail = '';
+  for (; n > 0n; n /= B62) tail = ALPHA[Number(n % B62)] + tail;
+  return ALPHA[Math.floor(h / 62)] + ALPHA[h % 62] + tail;
+}
+function unpack(code) {
+  const digits = [...code].map(c => ALPHA.indexOf(c));
+  if (digits.length < 2 || digits.includes(-1)) return null;
+  const h = digits[0] * 62 + digits[1], flags = h % 12, count = Math.floor(h / 12);
+  if (count > 25) return null;
+  let n = 0n;
+  for (const d of digits.slice(2)) n = n * B62 + BigInt(d);
+  const empty = [...Array(25).keys()], toks = [];
+  for (let i = 0; i < count; i++) {
+    const r = BigInt(empty.length * 6), d = Number(n % r);
+    n /= r;
+    const v = d % 6;
+    toks.push(CELLS[empty.splice(Math.floor(d / 6), 1)[0]] + (v === 5 ? 'x' : v + 1));
+  }
+  if (n !== 0n) return null;
+  const link = flags >= 4, f = link ? flags - 4 : flags;
+  if (f & 1) { if (!count) return null; toks.splice(1, 0, '_'); }   // a steal can only follow the first move
+  return (link ? '~' + (f & 4 ? 'b' : 'r') : '') + (f & 2 ? 'B' : 'R') + toks.join('');
+}
 let pushCode = false;   // the next address change gets its own entry in the browser's history (a new game)
 
 function writeCode() {
@@ -103,7 +150,8 @@ function writeCode() {
   try { window.history[push ? 'pushState' : 'replaceState'](null, '', '#' + code); } catch (_) { location.hash = code; }
 }
 function loadCode(code) {
-  const m = /^(?:(~)([rb]?))?([RB])((?:[a-y][1-5x]|_)*)$/.exec(code);
+  if (!READABLE.test(code)) code = unpack(code);   // older links used the readable form directly
+  const m = code && READABLE.exec(code);
   if (!m) return false;
   const was = { S, history, starter };
   starter = m[3]; S = fresh(); history = [];
@@ -153,7 +201,8 @@ async function copyText(t) {
 }
 window.addEventListener('hashchange', () => {   // a newer link opened in this tab, or the back button
   const code = location.hash.slice(1);
-  if (code && code !== gameCode() && loadCode(code)) render();
+  if (code === gameCode()) return;
+  if (loadCode(code)) render(); else writeCode();   // not a game: put the current one back in the address
 });
 
 /* ---------- Render ---------- */
