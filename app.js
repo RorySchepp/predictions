@@ -238,8 +238,16 @@ function render() {
                 ...Array(Math.ceil(open / 2)).fill(''), ...Array(sc.B).fill('B')];
   $('bar').innerHTML = segs.map(c => `<span class="${c}"></span>`).join('');
   $('score').setAttribute('aria-label', `Score: Red ${sc.R}, Blue ${sc.B}`);
-  $('turn').className = cx('turn', active);
-  $('turn').innerHTML = active ? `<span class="dot"></span>${NAME[active]} to move` : '';
+  if (S.phase === 'over') {
+    const [cls, text] = sc.R > sc.B ? ['R', `Red wins, ${sc.R}–${sc.B}`]
+                      : sc.B > sc.R ? ['B', `Blue wins, ${sc.B}–${sc.R}`]
+                      : ['', `A draw, ${sc.R}–${sc.B}`];
+    $('turn').className = cx('turn', 'final', cls);
+    $('turn').textContent = text;
+  } else {
+    $('turn').className = cx('turn', active);
+    $('turn').innerHTML = active ? `<span class="dot"></span>${NAME[active]} to move` : '';
+  }
 
   let html = '<div class="corner"></div>';
   for (let c = 0; c < 5; c++) html += ind(5 + c);
@@ -290,23 +298,16 @@ const undoBtn = () => `<button class="k undo" data-action="undo" data-key="undo"
 const SENT_LABEL = { earlier: 'Sent · send again', shared: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copying failed · try again' };
 
 function panel(sc) {
-  let result = '';
-  if (S.phase === 'over') {
-    const [cls, text] = sc.R > sc.B ? ['R', `Red wins, ${sc.R}–${sc.B}`]
-                      : sc.B > sc.R ? ['B', `Blue wins, ${sc.B}–${sc.R}`]
-                      : ['', `A draw, ${sc.R}–${sc.B}`];
-    result = `<p class="${cx('result', cls)}">${text}</p>`;
-  }
   // Link play: after your move the board waits until you send it; after sending, until the reply comes.
   if (pending()) {
-    return `${result}<div class="${cx('pal', result && 'sub')}"><button class="k word armed wide" data-action="send" data-key="send" title="Send this position to your opponent (Enter)">Send move</button>${undoBtn()}</div>`;
+    return `<div class="pal"><button class="k word armed wide" data-action="send" data-key="send" title="Send this position to your opponent (Enter)">Send move</button>${undoBtn()}</div>`;
   }
   if (mode === 'link' && S.phase === 'play' && S.turn !== seat) {   // waiting for the reply
     const text = sent ? SENT_LABEL[sent] : `Send to ${NAME[other(seat)]}`;
     return `<div class="pal"><button class="k word wide" data-action="send" data-key="send" title="Send ${NAME[other(seat)]} their copy of the game">${text}</button>${undoBtn()}</div>`;
   }
   if (S.phase === 'over') {
-    return `${result}<div class="pal sub"><button class="k word armed" data-action="again" data-key="again">Play again</button>${undoBtn()}</div>`;
+    return `<div class="pal"><button class="k word armed" data-action="again" data-key="again">Play again</button>${undoBtn()}</div>`;
   }
   const armed = sel >= 0 && !S.board[sel];
   const keys = VALUES.map(v => {

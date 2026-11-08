@@ -15,7 +15,7 @@ body {
 .R { --tone: var(--red); }
 .B { --tone: var(--blue); }
 button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
-.k, .sq, .pts, .result { line-height: 1; display: flex; align-items: center; justify-content: center; }
+.k, .sq, .pts { line-height: 1; display: flex; align-items: center; justify-content: center; }
 button:disabled { cursor: default; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
@@ -58,6 +58,7 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 .labels { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
 .labels .R, .labels .B { color: var(--tone); }
 .turn { display: flex; align-items: center; gap: 7px; font-family: var(--serif); font-style: italic; font-weight: 700; font-size: 15px; letter-spacing: 0; }
+.turn.final { font-size: 22px; color: var(--tone, var(--ink)); }
 .dot { width: 8px; height: 8px; background: var(--tone); transform: rotate(45deg); }
 
 /* ---------- Board ---------- */
@@ -97,7 +98,6 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 /* ---------- Controls ---------- */
 .pal { display: flex; justify-content: center; gap: 6px; }
 .pal.sub { margin-top: 8px; }
-.result + .pal.sub { margin-top: 14px; }
 .k {
   flex: 1 1 0; min-width: 0; height: 52px; padding: 0; border-radius: 0;
   border: 1px solid var(--rule); background: var(--bg);
@@ -112,7 +112,6 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
 .k.word.armed { background: var(--ink); color: var(--bg); }
 .k.word.wide { flex: 1 1 auto; }
 
-.result { margin: 0; text-align: center; font-family: var(--serif); font-style: italic; font-weight: 900; font-size: 34px; color: var(--tone, var(--ink)); }
 
 /* ---------- Phones: compact enough that the whole game fits one screen without scrolling ----------
    The board always spans the full column, the same width as the score box and the buttons;
@@ -128,8 +127,7 @@ h1 { margin: 0; min-width: 0; font-family: var(--serif); font-style: italic; fon
   .k { height: 46px; }
   .k.undo { flex-basis: 46px; }
   .pal.sub { margin-top: 6px; }
-  .result { font-size: 28px; }
-  .result + .pal.sub { margin-top: 8px; }
+  .turn.final { font-size: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
