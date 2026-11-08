@@ -88,16 +88,19 @@ function scores() {
    Inside, a game is a readable move list like Rm3gx_a5: who moved first (R or B), then each move in order,
    as a square (a–y, reading left to right, top to bottom) and a piece (1–5 or x). An _ is a steal.
    A game played by link starts with ~ and the seat that copy belongs to: ~bRm3 is Blue's copy, and since it's
-   Blue's turn, Blue can move; Red's own copy, ~rRm3, just waits.
+   Blue's turn, Blue can move. Red's own copy is ~rRm3 until Red sends it, then ~r!Rm3: the ! marks it sent.
+   So on reload an unsent move can still be sent or taken back, and a sent one just waits.
    The address carries that list packed small (see pack below). Reloading or opening the link replays it. */
 const CELLS = 'abcdefghijklmnopqrstuvwxy';
-const READABLE = /^(?:(~)([rb]?))?([RB])((?:[a-y][1-5x]|_)*)$/;
-const readableFor = who => (mode === 'link' ? '~' + who.toLowerCase() : '') + S.first + S.log;
+const READABLE = /^(?:(~)([rb]?)(!?))?([RB])((?:[a-y][1-5x]|_)*)$/;
+const readableFor = who => (mode === 'link' ? '~' + who.toLowerCase() + (sent && who === seat ? '!' : '') : '')
+                           + S.first + S.log;
 const codeFor = who => pack(readableFor(who));
 const gameCode = () => codeFor(seat);
 
 /* Packing. Not secret, just short and not readable at a glance.
-   Two characters hold the mode, seat, who moved first, whether there was a steal, and how many pieces are down.
+   Two characters hold the mode, seat, sent mark, who moved first, whether there was a steal, and how many pieces
+   are down. (Header values 0–311 are the original codes; sent copies use 312 and up, so older links still open.)
    The moves become one number: each move is a choice of one of the empty squares left times one of six pieces,
    so the choices multiply into a single number, written in base 62. A full 25-move game is about 27 characters.
    The alphabet has no R, B or ~, so a packed code can never be mistaken for an old readable one. */
@@ -105,9 +108,9 @@ const ALPHA = '0123456789abcdefghijklmnopqrstuvwxyzACDEFGHIJKLMNOPQSTUVWXYZ-_';
 const B62 = BigInt(ALPHA.length);
 function pack(readable) {
   const m = READABLE.exec(readable);
-  const link = !!m[1], toks = m[4].match(/[a-y][1-5x]|_/g) || [];
+  const link = !!m[1], toks = m[5].match(/[a-y][1-5x]|_/g) || [];
   const moves = toks.filter(t => t !== '_');
-  const f = (m[3] === 'B' ? 2 : 0) + (toks.includes('_') ? 1 : 0);
+  const f = (m[4] === 'B' ? 2 : 0) + (toks.includes('_') ? 1 : 0);
   const flags = link ? 4 + (m[2] === 'b' ? 4 : 0) + f : f;
   const empty = [...Array(25).keys()];
   let n = 0n, scale = 1n;
@@ -117,7 +120,7 @@ function pack(readable) {
     scale *= BigInt(empty.length * 6);
     empty.splice(k, 1);
   }
-  const h = flags + 12 * moves.length;
+  const h = link && m[3] ? 312 + (flags - 4) + 8 * moves.length : flags + 12 * moves.length;
   let tail = '';
   for (; n > 0n; n /= B62) tail = ALPHA[Number(n % B62)] + tail;
   return ALPHA[Math.floor(h / 62)] + ALPHA[h % 62] + tail;
@@ -125,7 +128,9 @@ function pack(readable) {
 function unpack(code) {
   const digits = [...code].map(c => ALPHA.indexOf(c));
   if (digits.length < 2 || digits.includes(-1)) return null;
-  const h = digits[0] * 62 + digits[1], flags = h % 12, count = Math.floor(h / 12);
+  const h = digits[0] * 62 + digits[1], isSent = h >= 312;
+  const flags = isSent ? 4 + (h - 312) % 8 : h % 12;
+  const count = isSent ? Math.floor((h - 312) / 8) : Math.floor(h / 12);
   if (count > 25) return null;
   let n = 0n;
   for (const d of digits.slice(2)) n = n * B62 + BigInt(d);
@@ -139,7 +144,7 @@ function unpack(code) {
   if (n !== 0n) return null;
   const link = flags >= 4, f = link ? flags - 4 : flags;
   if (f & 1) { if (!count) return null; toks.splice(1, 0, '_'); }   // a steal can only follow the first move
-  return (link ? '~' + (f & 4 ? 'b' : 'r') : '') + (f & 2 ? 'B' : 'R') + toks.join('');
+  return (link ? '~' + (f & 4 ? 'b' : 'r') + (isSent ? '!' : '') : '') + (f & 2 ? 'B' : 'R') + toks.join('');
 }
 let pushCode = false;   // the next address change gets its own entry in the browser's history (a new game)
 
@@ -154,8 +159,8 @@ function loadCode(code) {
   const m = code && READABLE.exec(code);
   if (!m) return false;
   const was = { S, history, starter };
-  starter = m[3]; S = fresh(); history = [];
-  for (const t of m[4].match(/[a-y][1-5x]|_/g) || []) {
+  starter = m[4]; S = fresh(); history = [];
+  for (const t of m[5].match(/[a-y][1-5x]|_/g) || []) {
     const ok = t === '_' ? applySteal()
                          : applyPlay(CELLS.indexOf(t[0]), t[1] === 'x' ? X : +t[1]);
     if (!ok) { ({ S, history, starter } = was); return false; }
@@ -163,8 +168,16 @@ function loadCode(code) {
   starter = S.first;
   mode = m[1] ? 'link' : 'local';
   seat = m[2] ? m[2].toUpperCase() : S.turn;   // a link without a seat belongs to whoever is to move
-  if (mode === 'link') history = [];   // what arrived can't be taken back
-  base = S.log.length; sent = '';
+  sent = mode === 'link' && m[3] ? 'earlier' : '';
+  base = S.log.length;
+  // In link play only your own unsent move can be taken back. If this copy's last move is yours and it isn't
+  // marked sent, it's still pending: keep the position before it for undo.
+  const lastMover = S.phase === 'over' ? S.turn : other(S.turn);
+  if (mode === 'link') {
+    const before = history.length ? JSON.parse(history[history.length - 1]) : null;
+    history = [];
+    if (before && !sent && lastMover === seat) { history = [JSON.stringify(before)]; base = before.log.length; }
+  }
   sel = S.phase === 'play' && S.moves === 0 ? 12 : -1;
   return true;
 }
@@ -274,7 +287,7 @@ function cell(i) {
 
 const UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const undoBtn = () => `<button class="k undo" data-action="undo" data-key="undo" aria-label="Undo" title="${mode === 'link' ? 'Take back your unsent move (U)' : 'Undo (U)'}"${canUndo() ? '' : ' disabled'}>${UNDO}</button>`;
-const SENT_LABEL = { shared: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copying failed · try again' };
+const SENT_LABEL = { earlier: 'Sent · send again', shared: 'Sent · send again', copied: 'Link copied · copy again', manual: 'Copying failed · try again' };
 
 function panel(sc) {
   let result = '';
